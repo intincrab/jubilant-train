@@ -1,0 +1,161 @@
+#include "codegen.h"
+#include <stdio.h>
+#include <string.h>
+
+#define INITIAL_BUFFER_SIZE 1024
+
+typedef struct {
+    char* buffer;
+    size_t size;
+    size_t capacity;
+} StringBuilder;
+
+StringBuilder* init_string_builder() {
+    StringBuilder* sb = malloc(sizeof(StringBuilder));
+    sb->capacity = INITIAL_BUFFER_SIZE;
+    sb->buffer = malloc(sb->capacity);
+    sb->size = 0;
+    sb->buffer[0] = '\0';
+    return sb;
+}
+
+void append_string(StringBuilder* sb, const char* str) {
+    size_t len = strlen(str);
+    
+    if (sb->size + len + 1 > sb->capacity) {
+        while (sb->size + len + 1 > sb->capacity) {
+            sb->capacity *= 2;
+        }
+        sb->buffer = realloc(sb->buffer, sb->capacity);
+    }
+    
+    strcat(sb->buffer + sb->size, str);
+    sb->size += len;
+}
+
+char* finalize_string_builder(StringBuilder* sb) {
+    char* result = sb->buffer;
+    free(sb);
+    return result;
+}
+
+void generate_expression(StringBuilder* sb, ASTNode* node) {
+    switch (node->type) {
+        case AST_NUMBER:
+            sprintf(sb->buffer + sb->size, "%d", node->data.number.value);
+            sb->size += strlen(sb->buffer + sb->size);
+            break;
+            
+        case AST_VARIABLE:
+            append_string(sb, node->data.variable.name);
+            break;
+            
+        case AST_BINARY_OP:
+            append_string(sb, "(");
+            generate_expression(sb, node->data.binary_op.left);
+            
+            // Map our special operator markers
+            char op = node->data.binary_op.op;
+            
+            if (op == '+') {
+                append_string(sb, " + ");
+            } else if (op == '-') {
+                append_string(sb, " - ");
+            } else if (op == '*') {
+                append_string(sb, " * ");
+            } else if (op == '/') {
+                append_string(sb, " / ");
+            } else if (op == '>') {
+                append_string(sb, " > ");
+            } else if (op == '<') {
+                append_string(sb, " < ");
+            } else if (op == '=') { // Equality (==)
+                append_string(sb, " === ");
+            } else if (op == '!') { // Not equal (!=)
+                append_string(sb, " !== ");
+            } else if (op == 'G') { // Greater or equal (>=)
+                append_string(sb, " >= ");
+            } else if (op == 'L') { // Less or equal (<=)
+                append_string(sb, " <= ");
+            } else {
+                fprintf(stderr, "Error: Unknown binary operator: %c\n", op);
+                exit(1);
+            }
+            
+            generate_expression(sb, node->data.binary_op.right);
+            append_string(sb, ")");
+            break;
+            
+        default:
+            fprintf(stderr, "Error: Unknown node type in expression\n");
+            exit(1);
+    }
+}
+
+void generate_statement(StringBuilder* sb, ASTNode* node) {
+    switch (node->type) {
+        case AST_ASSIGN:
+            append_string(sb, "let ");
+            append_string(sb, node->data.assign.name);
+            append_string(sb, " = ");
+            generate_expression(sb, node->data.assign.value);
+            append_string(sb, ";\n");
+            break;
+            
+        case AST_IF:
+            append_string(sb, "if (");
+            generate_expression(sb, node->data.if_statement.condition);
+            append_string(sb, ") {\n");
+            
+            for (size_t i = 0; i < node->data.if_statement.if_body->data.program.statement_count; i++) {
+                append_string(sb, "  ");
+                generate_statement(sb, node->data.if_statement.if_body->data.program.statements[i]);
+            }
+            
+            append_string(sb, "}");
+            
+            if (node->data.if_statement.else_body) {
+                append_string(sb, " else {\n");
+                
+                for (size_t i = 0; i < node->data.if_statement.else_body->data.program.statement_count; i++) {
+                    append_string(sb, "  ");
+                    generate_statement(sb, node->data.if_statement.else_body->data.program.statements[i]);
+                }
+                
+                append_string(sb, "}");
+            }
+            
+            append_string(sb, "\n");
+            break;
+            
+        case AST_PRINT:
+            append_string(sb, "console.log(");
+            generate_expression(sb, node->data.print.expression);
+            append_string(sb, ");\n");
+            break;
+            
+        default:
+            fprintf(stderr, "Error: Unknown node type in statement\n");
+            exit(1);
+    }
+}
+
+char* generate_code(ASTNode* node) {
+    if (node->type != AST_PROGRAM) {
+        fprintf(stderr, "Error: Expected program node for code generation\n");
+        return NULL;
+    }
+    
+    StringBuilder* sb = init_string_builder();
+    append_string(sb, "// Generated by TinyCompiler\n\n");
+    
+    for (size_t i = 0; i < node->data.program.statement_count; i++) {
+        generate_statement(sb, node->data.program.statements[i]);
+    }
+    
+    return finalize_string_builder(sb);
+}
+
+void free_code(char* code) {
+    free(code);
+}
