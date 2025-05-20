@@ -204,10 +204,45 @@ http://localhost:8000/index-wasm.html
 ## WebAssembly Advantages
 
 1. **Performance**: Near-native speed compared to JavaScript
+   - WebAssembly code runs much faster than dynamically loaded JavaScript files
+   - Compiled WebAssembly code can use performance optimizations like JIT (just-in-time) or AOT (ahead-of-time) compilation
+   - For complex calculations, WebAssembly can be 10-100x faster than equivalent JavaScript code
+   - "Compiled WebAssembly code runs much faster than dynamically loaded JavaScript files" [1]
+
 2. **Portability**: Runs in all major browsers
+   - WebAssembly is fully supported by Chrome, Firefox, Edge, and Safari
+   - As a W3C standard, WebAssembly is the fourth official language of the web (alongside HTML, CSS, and JavaScript)
+   - "WebAssembly is universally supported... Chrome, Firefox, Edge and Safari all execute WebAssembly files" [1]
+   - Hardware-independent at both build-time and runtime, allowing for true cross-platform deployment
+
 3. **Language Choice**: Write in C/C++ instead of JavaScript
+   - Developers can use languages like C, C++, Rust, Go, and more to write web applications
+   - Ideal for reusing existing codebases and leveraging language-specific features
+   - "WebAssembly supports multiple programming languages... Developers can write Wasm apps in Java, Python, Rust, Golang or C++" [1]
+   - This project demonstrates writing a compiler in C that runs in the browser via WebAssembly
+
 4. **Memory Safety**: Runs in a sandboxed environment
+   - The WebAssembly virtual machine validates code before execution
+   - Executes within a memory-safe sandbox with limited access to system resources
+   - "The virtual machine validates WebAssembly code before it runs, and executes it inside a memory-safe sandbox" [1]
+   - Provides strong security guarantees compared to running native code directly
+
 5. **Direct Integration**: Seamless interaction with JavaScript
+   - WebAssembly modules can be called from JavaScript and vice versa
+   - Memory can be shared between JavaScript and WebAssembly
+   - Allows for incremental adoption - parts of an application can use WebAssembly while others use JavaScript
+   - "WebAssembly is transparent to the client... within a web application, Wasm code is accessed through standard APIs" [1]
+
+6. **Size Efficiency**: Compact binary format
+   - WebAssembly files are significantly smaller than equivalent JavaScript files
+   - "An uncompressed JavaScript file can be 100 times larger than an equivalent WebAssembly file" [1]
+   - Reduces download times and improves page load performance
+
+## References
+
+[1] "Why WebAssembly? Top 11 Wasm benefits" - TheServerSide, https://www.theserverside.com/tip/Why-WebAssembly-Top-Wasm-benefits
+
+[2] "Use Cases" - WebAssembly.org, https://webassembly.org/docs/use-cases/
 
 ## License
 
