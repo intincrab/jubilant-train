@@ -200,6 +200,27 @@ http://localhost:8000/index-wasm.html
   - `tiny-compiler.wasm` - Compiled WebAssembly binary
 - `build/` - Native build outputs
 - `examples/` - Example programs
+- `tests/` - Test files
+  - `test_parser.c` - Parser unit test
+  - `Makefile` - Test compilation and execution
+
+## Running Tests
+
+### Parser Tests
+
+To run the parser tests, navigate to the `tests` directory and run:
+
+```bash
+make && make test
+```
+
+This will compile and execute the parser test, which verifies:
+- Basic variable assignments
+- Binary operations
+- Conditional statements with if/else
+- Print statements
+
+The test creates an AST from a sample program and verifies the AST structure is correct.
 
 ## WebAssembly Advantages
 
