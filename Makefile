@@ -9,7 +9,7 @@ SRCS = $(SRC_DIR)/main.c $(SRC_DIR)/lexer.c $(SRC_DIR)/parser.c $(SRC_DIR)/codeg
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 TARGET = $(BUILD_DIR)/tiny-compiler
 
-WASM_CFLAGS = -s WASM=1 -s EXPORTED_FUNCTIONS='["_compile", "_free_result", "_malloc", "_free"]' -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap", "UTF8ToString"]' -s ALLOW_MEMORY_GROWTH=1
+WASM_CFLAGS = -s WASM=1 -s EXPORTED_FUNCTIONS='["_compile", "_free_result", "_malloc", "_free", "_main"]' -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap", "UTF8ToString"]' -s ALLOW_MEMORY_GROWTH=1
 WASM_TARGET = $(PUBLIC_DIR)/tiny-compiler.js
 
 .PHONY: all clean wasm

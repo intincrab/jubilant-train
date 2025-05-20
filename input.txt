@@ -1,0 +1,30 @@
+// Example program in our tiny language
+
+// Declare and initialize variables
+x = 10;
+y = 5;
+
+// Arithmetic operations
+sum = x + y;
+diff = x - y;
+product = x * y;
+quotient = x / y;
+
+// Print results
+print(sum);      // 15
+print(diff);     // 5
+print(product);  // 50
+print(quotient); // 2
+
+// Conditional logic
+if (x > y) {
+    print(x);
+    z = x * 2;
+    print(z);
+} else {
+    print(y);
+}
+
+// Nested expressions
+result = (x + y) * (x - y);
+print(result);   // 15 * 5 = 75 
