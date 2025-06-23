@@ -223,3 +223,364 @@ Debugging WebAssembly is challenging, but several options exist:
 - Cannot access the file system (except through browser APIs)
 - Memory is protected from out-of-bounds access
 - No direct system call access 
+
+# WebAssembly Integration - AST Visualization Pipeline
+
+This document explains how the AST visualization works from C code to frontend display, demonstrating the complete pipeline of compiler visualization.
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            BROWSER FRONTEND                                  │
+│                                                                             │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
+│  │   Source Code   │  │  AST Visualizer │  │    Token Visualizer         │  │
+│  │   Text Editor   │  │  (Interactive   │  │    (Color-coded tokens)     │  │
+│  │                 │  │   Tree Display) │  │                             │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
+│           │                     ▲                           ▲               │
+│           │                     │                           │               │
+│           ▼                     │                           │               │
+│  ┌─────────────────────────────────────────────────────────────────────────┐  │
+│  │                    JavaScript Interface Layer                          │  │
+│  │  • Module.cwrap() function bindings                                    │  │
+│  │  • Memory management (UTF8ToString, malloc/free)                       │  │
+│  │  • JSON parsing and DOM manipulation                                   │  │
+│  └─────────────────────────────────────────────────────────────────────────┘  │
+│           │                     ▲                           ▲               │
+│           │                     │                           │               │
+└───────────┼─────────────────────┼───────────────────────────┼───────────────┘
+            │                     │                           │
+            ▼                     │                           │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         WEBASSEMBLY MODULE                                  │
+│                                                                             │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
+│  │   compile()     │  │   parse_ast()   │  │      tokenize()             │  │
+│  │   EXPORTED      │  │   EXPORTED      │  │      EXPORTED               │  │
+│  │                 │  │                 │  │                             │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
+│           │                     │                           │               │
+│           ▼                     ▼                           ▼               │
+│  ┌─────────────────────────────────────────────────────────────────────────┐  │
+│  │                         C COMPILER CORE                                │  │
+│  │                                                                         │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐ │  │
+│  │  │   Lexer     │  │   Parser    │  │  Code Gen   │  │  AST Serializer │ │  │
+│  │  │   (lexer.c) │  │ (parser.c)  │  │ (codegen.c) │  │   (parser.c)    │ │  │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────────┘ │  │
+│  └─────────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## AST Visualization Pipeline
+
+### 1. C Code: AST Structure Definition
+
+The AST is defined in `src/parser.h` with a union-based structure:
+
+```c
+typedef enum {
+    AST_PROGRAM,
+    AST_VARIABLE,
+    AST_NUMBER,
+    AST_BINARY_OP,
+    AST_ASSIGN,
+    AST_IF,
+    AST_PRINT
+} ASTNodeType;
+
+typedef struct ASTNode {
+    ASTNodeType type;
+    union {
+        struct {
+            struct ASTNode** statements;
+            size_t statement_count;
+        } program;
+        
+        struct {
+            char* name;
+        } variable;
+        
+        struct {
+            int value;
+        } number;
+        
+        struct {
+            char op;
+            struct ASTNode* left;
+            struct ASTNode* right;
+        } binary_op;
+        
+        struct {
+            char* name;
+            struct ASTNode* value;
+        } assign;
+        
+        struct {
+            struct ASTNode* condition;
+            struct ASTNode* if_body;
+            struct ASTNode* else_body;
+        } if_statement;
+        
+        struct {
+            struct ASTNode* expression;
+        } print;
+    } data;
+} ASTNode;
+```
+
+### 2. C Code: AST to JSON Serialization
+
+The `ast_to_json()` function in `src/parser.c` recursively converts the AST to JSON:
+
+```c
+char* ast_to_json_recursive(ASTNode* node, int depth) {
+    if (!node) return strdup("null");
+    
+    // Create formatted JSON with proper indentation
+    char* json = malloc(buffer_size);
+    sprintf(json, "{\n%s  \"type\": \"%s\",\n%s  \"id\": %p", 
+            indent, ast_node_type_to_string(node->type), indent, (void*)node);
+    
+    // Add node-specific data based on type
+    switch (node->type) {
+        case AST_PROGRAM:
+            // Serialize statements array
+            for (size_t i = 0; i < node->data.program.statement_count; i++) {
+                char* child_json = ast_to_json_recursive(node->data.program.statements[i], depth + 2);
+                strcat(json, child_json);
+                free(child_json);
+            }
+            break;
+        case AST_BINARY_OP:
+            // Serialize left and right operands
+            char* left_json = ast_to_json_recursive(node->data.binary_op.left, depth + 1);
+            char* right_json = ast_to_json_recursive(node->data.binary_op.right, depth + 1);
+            // ... append to json
+            break;
+        // ... other node types
+    }
+    
+    return json;
+}
+```
+
+### 3. WebAssembly Export
+
+The AST parsing function is exported in `src/main.c`:
+
+```c
+#ifdef __EMSCRIPTEN__
+EMSCRIPTEN_KEEPALIVE
+char* parse_ast(const char* source) {
+    return parse_to_ast(source);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void free_ast_json(char* ast_json) {
+    free(ast_json);
+}
+#endif
+```
+
+### 4. Compilation to WebAssembly
+
+The C code is compiled to WebAssembly with Emscripten:
+
+```bash
+emcc src/*.c -o public/tiny-compiler.js \
+  -s WASM=1 \
+  -s EXPORTED_FUNCTIONS='["_compile", "_tokenize", "_parse_ast", "_free_result", "_free_tokens", "_free_ast_json"]' \
+  -s EXPORTED_RUNTIME_METHODS='["cwrap", "UTF8ToString"]' \
+  -s ALLOW_MEMORY_GROWTH=1
+```
+
+This generates:
+- `tiny-compiler.wasm`: Binary WebAssembly module
+- `tiny-compiler.js`: JavaScript glue code
+
+### 5. JavaScript Interface Layer
+
+The frontend creates wrapper functions using `cwrap`:
+
+```javascript
+// WebAssembly module initialization
+Module = {
+    onRuntimeInitialized: function() {
+        parseAstFunction = Module.cwrap('parse_ast', 'number', ['string']);
+        freeAstJsonFunction = Module.cwrap('free_ast_json', null, ['number']);
+        
+        // Enable UI buttons
+        parseAstBtn.removeAttribute('disabled');
+    }
+};
+```
+
+### 6. Frontend AST Parsing
+
+When the user clicks "Parse AST" or auto-parse is enabled:
+
+```javascript
+function parseAst() {
+    const source = sourceEl.value.trim();
+    
+    try {
+        // Call WebAssembly function
+        const astPtr = parseAstFunction(source);
+        
+        // Convert C string to JavaScript string
+        const astJson = Module.UTF8ToString(astPtr);
+        
+        // Free C memory
+        freeAstJsonFunction(astPtr);
+        
+        // Parse JSON and display
+        const ast = JSON.parse(astJson);
+        displayAst(ast);
+        updateAstStats(ast);
+        
+    } catch (error) {
+        showError('AST parsing error: ' + error.toString());
+    }
+}
+```
+
+### 7. Interactive AST Visualization
+
+The `displayAst()` function creates an interactive tree visualization:
+
+```javascript
+function displayAst(ast) {
+    astContainer.innerHTML = '';
+    const treeEl = document.createElement('div');
+    treeEl.className = 'ast-tree';
+    
+    const rootNode = createAstNodeElement(ast);
+    treeEl.appendChild(rootNode);
+    astContainer.appendChild(treeEl);
+}
+
+function createAstNodeElement(node) {
+    const nodeEl = document.createElement('div');
+    nodeEl.className = 'ast-node';
+    
+    const contentEl = document.createElement('div');
+    contentEl.className = `ast-node-content ast-${node.type}`;
+    
+    // Add node type and details
+    const typeEl = document.createElement('div');
+    typeEl.className = 'ast-node-type';
+    typeEl.textContent = node.type;
+    
+    const detailsEl = document.createElement('div');
+    detailsEl.className = 'ast-node-details';
+    
+    // Add node-specific details
+    switch (node.type) {
+        case 'PROGRAM':
+            detailsEl.textContent = `${node.statement_count || 0} statements`;
+            break;
+        case 'VARIABLE':
+            detailsEl.textContent = node.name || 'unnamed';
+            break;
+        case 'NUMBER':
+            detailsEl.textContent = node.value?.toString() || '0';
+            break;
+        case 'BINARY_OP':
+            detailsEl.textContent = node.operator || '?';
+            break;
+        // ... other node types
+    }
+    
+    // Recursively add children
+    const children = getNodeChildren(node);
+    if (children.length > 0) {
+        const childrenEl = document.createElement('div');
+        childrenEl.className = 'ast-children';
+        
+        children.forEach(child => {
+            const childEl = createAstNodeElement(child);
+            childrenEl.appendChild(childEl);
+        });
+        
+        nodeEl.appendChild(childrenEl);
+    }
+    
+    return nodeEl;
+}
+```
+
+## Visual Design Features
+
+### Color-Coded Node Types
+
+Each AST node type has a distinct color scheme:
+
+```css
+.ast-PROGRAM { border-color: #3b82f6; background: #eff6ff; }
+.ast-ASSIGN { border-color: #ec4899; background: #fdf2f8; }
+.ast-VARIABLE { border-color: #10b981; background: #ecfdf5; }
+.ast-NUMBER { border-color: #a855f7; background: #faf5ff; }
+.ast-BINARY_OP { border-color: #f59e0b; background: #fffbeb; }
+.ast-IF { border-color: #ef4444; background: #fef2f2; }
+.ast-PRINT { border-color: #84cc16; background: #f7fee7; }
+```
+
+### Interactive Features
+
+- **Hover Effects**: Nodes lift up with enhanced shadows
+- **Node Details**: Each node shows type-specific information
+- **Responsive Layout**: Adapts to different screen sizes
+- **Tab Switching**: Toggle between AST and token views
+- **Auto-Parse**: Real-time updates as you type
+- **Statistics**: Shows node count and tree depth
+
+### Memory Management
+
+The system properly manages memory across the C/WebAssembly boundary:
+
+1. **C Side**: Uses `malloc()` to allocate JSON strings
+2. **JavaScript Side**: Uses `UTF8ToString()` to convert C strings
+3. **Cleanup**: Calls `free_ast_json()` to prevent memory leaks
+
+## Example AST Visualization
+
+For the input code:
+```
+x = 10;
+if (x > 5) {
+    print(x);
+}
+```
+
+The AST visualization shows:
+- **PROGRAM** node (root) with 2 statements
+- **ASSIGN** node for `x = 10`
+  - **VARIABLE** node for `x`
+  - **NUMBER** node for `10`
+- **IF** node for the conditional
+  - **BINARY_OP** node for `x > 5`
+    - **VARIABLE** node for `x`
+    - **NUMBER** node for `5`
+  - **PROGRAM** node for if body
+    - **PRINT** node
+      - **VARIABLE** node for `x`
+
+## Performance Benefits
+
+1. **WebAssembly Speed**: AST parsing runs at near-native C speed
+2. **Efficient Serialization**: Direct JSON generation in C
+3. **Minimal Memory Overhead**: Immediate cleanup after use
+4. **Real-time Updates**: Fast enough for auto-parse mode
+
+## Browser Compatibility
+
+The AST visualization works in all modern browsers that support:
+- WebAssembly (all major browsers since 2017)
+- ES6 JavaScript features
+- CSS Grid and Flexbox
+- Modern DOM APIs
+
+This complete pipeline demonstrates how complex compiler data structures can be efficiently visualized in web browsers using WebAssembly as a bridge between C and JavaScript. 

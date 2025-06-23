@@ -69,5 +69,6 @@ ASTNode* factor(Parser* parser);
 ASTNode* create_ast_node(ASTNodeType type);
 void free_ast(ASTNode* node);
 void free_parser(Parser* parser);
+char* ast_to_json(ASTNode* node);
 
 #endif 

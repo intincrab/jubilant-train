@@ -133,6 +133,20 @@ char* tokenize_string(const char* source) {
     return json_buffer;
 }
 
+char* parse_to_ast(const char* source) {
+    Lexer* lexer = init_lexer(strdup(source));
+    Parser* parser = init_parser(lexer);
+    
+    ASTNode* ast = parse(parser);
+    char* json = ast_to_json(ast);
+    
+    free_ast(ast);
+    free_parser(parser);
+    free_lexer(lexer);
+    
+    return json;
+}
+
 #ifdef __EMSCRIPTEN__
 EMSCRIPTEN_KEEPALIVE
 char* compile(const char* source) {
@@ -145,6 +159,11 @@ char* tokenize(const char* source) {
 }
 
 EMSCRIPTEN_KEEPALIVE
+char* parse_ast(const char* source) {
+    return parse_to_ast(source);
+}
+
+EMSCRIPTEN_KEEPALIVE
 void free_result(char* result) {
     free_code(result);
 }
@@ -152,6 +171,11 @@ void free_result(char* result) {
 EMSCRIPTEN_KEEPALIVE
 void free_tokens(char* tokens) {
     free(tokens);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void free_ast_json(char* ast_json) {
+    free(ast_json);
 }
 #endif
 

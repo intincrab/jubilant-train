@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AST JSON Test</title>
+</head>
+<body>
+    <h1>AST JSON Format Test</h1>
+    <textarea id="source" rows="5" cols="50">x = 10;</textarea><br>
+    <button onclick="testAst()">Test AST JSON</button><br>
+    <pre id="output"></pre>
+    
+    <script>
+        let parseAstFunction;
+        let freeAstJsonFunction;
+        
+        Module = {
+            onRuntimeInitialized: function() {
+                parseAstFunction = Module.cwrap('parse_ast', 'number', ['string']);
+                freeAstJsonFunction = Module.cwrap('free_ast_json', null, ['number']);
+                document.getElementById('output').textContent = 'WebAssembly module loaded. Ready to test.';
+            }
+        };
+        
+        function testAst() {
+            const source = document.getElementById('source').value;
+            const output = document.getElementById('output');
+            
+            try {
+                const astPtr = parseAstFunction(source);
+                const astJson = Module.UTF8ToString(astPtr);
+                freeAstJsonFunction(astPtr);
+                
+                // Try to parse the JSON to validate it
+                const ast = JSON.parse(astJson);
+                
+                output.textContent = 'JSON is valid!\n\n' + astJson;
+            } catch (error) {
+                output.textContent = 'Error: ' + error.toString();
+            }
+        }
+    </script>
+    <script async src="tiny-compiler.js"></script>
+</body>
+</html> 
