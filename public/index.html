@@ -4,107 +4,580 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tiny Compiler</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --secondary: #64748b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --background: #fafafa;
+            --surface: #ffffff;
+            --surface-hover: #f8fafc;
+            --border: #e2e8f0;
+            --border-hover: #cbd5e1;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --radius: 8px;
+            --radius-lg: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
             margin: 0;
-            padding: 20px;
-            color: #333;
-            max-width: 1200px;
-            margin: 0 auto;
+            padding: 0;
         }
-        h1 {
-            text-align: center;
-            margin-bottom: 20px;
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            line-height: 1.6;
+            font-size: 14px;
+            min-height: 100vh;
         }
+
         .container {
-            display: flex;
-            gap: 20px;
-            height: 70vh;
-        }
-        .editor-container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
-            flex: 1;
         }
-        label {
-            font-weight: bold;
-            margin-bottom: 5px;
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
         }
-        textarea {
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.025em;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            font-weight: 400;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 400px;
+            gap: 1.5rem;
             flex: 1;
-            padding: 10px;
-            font-family: 'Courier New', Courier, monospace;
+            min-height: 0;
+        }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+
+        .panel:hover {
+            border-color: var(--border-hover);
+            box-shadow: var(--shadow-md);
+        }
+
+        .panel-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface-hover);
+        }
+
+        .panel-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .panel-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .code-editor {
+            flex: 1;
+            padding: 1.5rem;
+            font-family: 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
             font-size: 14px;
-            border: 1px solid #ccc;
-            resize: none;
-        }
-        button {
-            padding: 10px 15px;
-            background-color: #4CAF50;
-            color: white;
+            line-height: 1.6;
             border: none;
-            cursor: pointer;
-            margin-top: 10px;
-            font-size: 16px;
+            outline: none;
+            background: transparent;
+            color: var(--text-primary);
+            resize: none;
+            tab-size: 2;
         }
-        button:hover {
-            background-color: #45a049;
+
+        .code-editor::placeholder {
+            color: var(--text-muted);
+            font-style: italic;
         }
-        #error {
-            color: red;
-            margin-top: 5px;
-            min-height: 20px;
+
+        .code-editor:focus {
+            background: var(--surface-hover);
         }
-        .examples {
-            margin-top: 20px;
+
+        .output-editor {
+            background: #f8fafc;
+            color: var(--text-secondary);
+        }
+
+        .tokens-container {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            background: var(--surface-hover);
+            min-height: 0;
+        }
+
+        .tokens-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-muted);
+            font-style: italic;
             text-align: center;
         }
-        .examples button {
-            margin: 5px;
-            background-color: #2196F3;
+
+        .token {
+            display: inline-flex;
+            align-items: center;
+            margin: 0.125rem;
+            padding: 0.375rem 0.75rem;
+            border-radius: var(--radius);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            font-weight: 500;
+            border: 1px solid;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            line-height: 1.2;
         }
-        .examples button:hover {
-            background-color: #0b7dda;
+
+        .token:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .token-tooltip {
+            position: absolute;
+            bottom: calc(100% + 0.5rem);
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--text-primary);
+            color: white;
+            padding: 0.5rem 0.75rem;
+            border-radius: var(--radius);
+            font-size: 0.6875rem;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            z-index: 1000;
+        }
+
+        .token:hover .token-tooltip {
+            opacity: 1;
+        }
+
+        .token-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 4px solid transparent;
+            border-top-color: var(--text-primary);
+        }
+
+        /* Token type styles */
+        .token-IDENTIFIER { background: #eff6ff; border-color: #3b82f6; color: #1e40af; }
+        .token-NUMBER { background: #faf5ff; border-color: #a855f7; color: #7c2d12; }
+        .token-IF, .token-ELSE, .token-PRINT { background: #fff7ed; border-color: #f97316; color: #c2410c; }
+        .token-PLUS, .token-MINUS, .token-MULTIPLY, .token-DIVIDE { background: #f0fdf4; border-color: #22c55e; color: #15803d; }
+        .token-ASSIGN { background: #fdf2f8; border-color: #ec4899; color: #be185d; }
+        .token-GREATER, .token-LESS, .token-EQUAL, .token-NOT_EQUAL, .token-GREATER_EQUAL, .token-LESS_EQUAL { 
+            background: #f7fee7; border-color: #84cc16; color: #4d7c0f; 
+        }
+        .token-LPAREN, .token-RPAREN, .token-LBRACE, .token-RBRACE { background: #fffbeb; border-color: #f59e0b; color: #d97706; }
+        .token-SEMICOLON { background: #f5f5f4; border-color: #78716c; color: #57534e; }
+        .token-EOF { background: #fef2f2; border-color: #f87171; color: #dc2626; }
+
+        .token-line-break {
+            display: block;
+            width: 100%;
+            height: 0.5rem;
+        }
+
+        .controls {
+            padding: 1.5rem;
+            border-top: 1px solid var(--border);
+            background: var(--surface-hover);
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.625rem 1.25rem;
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+            font-weight: 500;
+            border: 1px solid;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-decoration: none;
+            font-family: inherit;
+            line-height: 1.2;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            border-color: var(--primary-hover);
+        }
+
+        .btn-secondary {
+            background: var(--surface);
+            border-color: var(--border);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--surface-hover);
+            border-color: var(--border-hover);
+        }
+
+        .btn-success {
+            background: var(--success);
+            border-color: var(--success);
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn:disabled:hover {
+            transform: none;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .stats {
+            flex: 1;
+            font-size: 0.8125rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .error {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: var(--radius);
+            color: var(--error);
+            font-size: 0.875rem;
+            display: none;
+        }
+
+        .error.show {
+            display: block;
+        }
+
+        .examples {
+            margin-top: 2rem;
+            text-align: center;
+        }
+
+        .examples h3 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+
+        .examples-grid {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .legend {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .legend h4 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .legend-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .legend-color {
+            width: 1rem;
+            height: 1rem;
+            border-radius: 0.25rem;
+            border: 1px solid;
+            flex-shrink: 0;
+        }
+
+        /* Responsive design */
+        @media (max-width: 1200px) {
+            .main-grid {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: 1fr auto;
+            }
+            
+            .tokenization-panel {
+                grid-column: 1 / -1;
+                max-height: 300px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .main-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .btn {
+                justify-content: center;
+            }
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--border);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--text-muted);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
         }
     </style>
 </head>
 <body>
-    <h1>Tiny Compiler</h1>
-    <p>A simple compiler that translates a basic language to JavaScript.</p>
-    
     <div class="container">
-        <div class="editor-container">
-            <label for="source">Source Code:</label>
-            <textarea id="source" placeholder="Enter your code here..."></textarea>
+        <header class="header">
+            <h1>Tiny Compiler</h1>
+            <p>A modern compiler with real-time tokenization visualization</p>
+        </header>
+        
+        <main class="main-grid">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Source Code</h2>
+                </div>
+                <div class="panel-content">
+                    <textarea 
+                        id="source" 
+                        class="code-editor" 
+                        placeholder="// Enter your code here...
+x = 10;
+y = 20;
+print(x + y);"
+                        spellcheck="false"
+                    ></textarea>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">JavaScript Output</h2>
+                </div>
+                <div class="panel-content">
+                    <textarea 
+                        id="output" 
+                        class="code-editor output-editor" 
+                        readonly
+                        placeholder="// Compiled JavaScript will appear here..."
+                    ></textarea>
+                </div>
+            </div>
+            
+            <div class="panel tokenization-panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Tokenization</h2>
+                </div>
+                <div class="panel-content">
+                    <div id="tokens-container" class="tokens-container">
+                        <div class="tokens-empty">
+                            Enter source code to see tokens
+                        </div>
+                    </div>
+                </div>
+                <div class="controls">
+                    <button id="tokenize-btn" class="btn btn-secondary" disabled>
+                        <span>Tokenize</span>
+                    </button>
+                    <button id="auto-tokenize" class="btn btn-secondary">
+                        <span>Auto-Tokenize</span>
+                    </button>
+                    <div class="stats" id="token-stats"></div>
+                </div>
+            </div>
+        </main>
+        
+        <div class="controls">
+            <button id="compile" class="btn btn-primary" disabled>
+                <span>Compile</span>
+            </button>
+            <div class="stats">Ready to compile</div>
         </div>
-        <div class="editor-container">
-            <label for="output">JavaScript Output:</label>
-            <textarea id="output" readonly></textarea>
+        
+        <div id="error" class="error"></div>
+        
+        <section class="examples">
+            <h3>Examples</h3>
+            <div class="examples-grid">
+                <button id="example1" class="btn btn-secondary">Basic Variables</button>
+                <button id="example2" class="btn btn-secondary">Conditional Logic</button>
+                <button id="example3" class="btn btn-secondary">Arithmetic Operations</button>
+            </div>
+        </section>
+        
+        <div class="legend">
+            <h4>Token Types</h4>
+            <div class="legend-grid">
+                <div class="legend-item">
+                    <div class="legend-color token-IDENTIFIER"></div>
+                    <span>Identifier</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color token-NUMBER"></div>
+                    <span>Number</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color token-IF"></div>
+                    <span>Keyword</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color token-PLUS"></div>
+                    <span>Operator</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color token-ASSIGN"></div>
+                    <span>Assignment</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color token-GREATER"></div>
+                    <span>Comparison</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color token-LPAREN"></div>
+                    <span>Delimiter</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color token-SEMICOLON"></div>
+                    <span>Terminator</span>
+                </div>
+            </div>
         </div>
-    </div>
-    
-    <div id="error"></div>
-    <button id="compile">Compile</button>
-    
-    <div class="examples">
-        <h3>Examples:</h3>
-        <button id="example1">Basic Variables</button>
-        <button id="example2">If Statement</button>
-        <button id="example3">Arithmetic</button>
     </div>
     
     <script>
         let compileFunction;
+        let tokenizeFunction;
         let freeResultFunction;
+        let freeTokensFunction;
+        let autoTokenize = false;
+        
         const exampleCode = {
             example1: `x = 10;
 y = 20;
 print(x);
 print(y);`,
             example2: `x = 10;
-if (x) {
+if (x > 5) {
     print(x);
 } else {
     print(0);
@@ -117,35 +590,69 @@ d = (a + b) * 2;
 print(d);`
         };
         
-        // Wait for the WebAssembly module to load
+        // DOM elements
+        const sourceEl = document.getElementById('source');
+        const outputEl = document.getElementById('output');
+        const tokensContainer = document.getElementById('tokens-container');
+        const tokenStats = document.getElementById('token-stats');
+        const errorEl = document.getElementById('error');
+        const compileBtn = document.getElementById('compile');
+        const tokenizeBtn = document.getElementById('tokenize-btn');
+        const autoTokenizeBtn = document.getElementById('auto-tokenize');
+        
+        // WebAssembly module initialization
         Module = {
             onRuntimeInitialized: function() {
                 compileFunction = Module.cwrap('compile', 'number', ['string']);
+                tokenizeFunction = Module.cwrap('tokenize', 'number', ['string']);
                 freeResultFunction = Module.cwrap('free_result', null, ['number']);
+                freeTokensFunction = Module.cwrap('free_tokens', null, ['number']);
                 
-                document.getElementById('compile').removeAttribute('disabled');
-                document.getElementById('compile').addEventListener('click', compileCode);
+                // Enable buttons
+                compileBtn.removeAttribute('disabled');
+                tokenizeBtn.removeAttribute('disabled');
                 
-                document.getElementById('example1').addEventListener('click', () => {
-                    document.getElementById('source').value = exampleCode.example1;
+                // Add event listeners
+                compileBtn.addEventListener('click', compileCode);
+                tokenizeBtn.addEventListener('click', tokenizeCode);
+                autoTokenizeBtn.addEventListener('click', toggleAutoTokenize);
+                
+                // Example buttons
+                document.getElementById('example1').addEventListener('click', () => loadExample('example1'));
+                document.getElementById('example2').addEventListener('click', () => loadExample('example2'));
+                document.getElementById('example3').addEventListener('click', () => loadExample('example3'));
+                
+                // Auto-tokenize on input
+                sourceEl.addEventListener('input', () => {
+                    if (autoTokenize) {
+                        clearTimeout(window.tokenizeTimeout);
+                        window.tokenizeTimeout = setTimeout(tokenizeCode, 300);
+                    }
                 });
                 
-                document.getElementById('example2').addEventListener('click', () => {
-                    document.getElementById('source').value = exampleCode.example2;
-                });
-                
-                document.getElementById('example3').addEventListener('click', () => {
-                    document.getElementById('source').value = exampleCode.example3;
-                });
+                updateStatus('Ready to compile');
             }
         };
         
+        function loadExample(exampleKey) {
+            sourceEl.value = exampleCode[exampleKey];
+            sourceEl.focus();
+            if (autoTokenize) {
+                tokenizeCode();
+            }
+            hideError();
+        }
+        
         function compileCode() {
-            const source = document.getElementById('source').value;
-            const errorEl = document.getElementById('error');
-            const outputEl = document.getElementById('output');
+            const source = sourceEl.value.trim();
             
-            errorEl.textContent = '';
+            if (!source) {
+                showError('Please enter some source code to compile');
+                return;
+            }
+            
+            hideError();
+            updateStatus('Compiling...');
             
             try {
                 const resultPtr = compileFunction(source);
@@ -153,9 +660,113 @@ print(d);`
                 freeResultFunction(resultPtr);
                 
                 outputEl.value = result;
+                updateStatus('Compilation successful');
+                
+                if (autoTokenize) {
+                    tokenizeCode();
+                }
             } catch (error) {
-                errorEl.textContent = error.toString();
+                showError('Compilation error: ' + error.toString());
                 outputEl.value = '';
+                updateStatus('Compilation failed');
+            }
+        }
+        
+        function tokenizeCode() {
+            const source = sourceEl.value.trim();
+            
+            if (!source) {
+                tokensContainer.innerHTML = '<div class="tokens-empty">Enter source code to see tokens</div>';
+                tokenStats.textContent = '';
+                return;
+            }
+            
+            try {
+                const tokensPtr = tokenizeFunction(source);
+                const tokensJson = Module.UTF8ToString(tokensPtr);
+                freeTokensFunction(tokensPtr);
+                
+                const tokens = JSON.parse(tokensJson);
+                displayTokens(tokens);
+                updateTokenStats(tokens);
+                
+            } catch (error) {
+                showError('Tokenization error: ' + error.toString());
+                tokensContainer.innerHTML = '<div class="tokens-empty">Error during tokenization</div>';
+                tokenStats.textContent = '';
+            }
+        }
+        
+        function displayTokens(tokens) {
+            tokensContainer.innerHTML = '';
+            
+            tokens.forEach((token, index) => {
+                const tokenEl = document.createElement('span');
+                tokenEl.className = `token token-${token.type}`;
+                tokenEl.textContent = token.value || token.type;
+                
+                const tooltip = document.createElement('span');
+                tooltip.className = 'token-tooltip';
+                tooltip.textContent = `${token.type}${token.value ? ': "' + token.value + '"' : ''}`;
+                tokenEl.appendChild(tooltip);
+                
+                tokensContainer.appendChild(tokenEl);
+                
+                // Add line breaks for better readability
+                if (token.type === 'SEMICOLON' || token.type === 'RBRACE') {
+                    const lineBreak = document.createElement('div');
+                    lineBreak.className = 'token-line-break';
+                    tokensContainer.appendChild(lineBreak);
+                }
+            });
+        }
+        
+        function updateTokenStats(tokens) {
+            const tokenCounts = {};
+            tokens.forEach(token => {
+                tokenCounts[token.type] = (tokenCounts[token.type] || 0) + 1;
+            });
+            
+            const totalTokens = tokens.length;
+            const uniqueTypes = Object.keys(tokenCounts).length;
+            
+            let statsText = `${totalTokens} tokens, ${uniqueTypes} types`;
+            
+            const sortedTypes = Object.entries(tokenCounts)
+                .sort(([,a], [,b]) => b - a)
+                .slice(0, 2);
+            
+            if (sortedTypes.length > 0) {
+                const topTypes = sortedTypes.map(([type, count]) => `${type}(${count})`).join(', ');
+                statsText += ` • ${topTypes}`;
+            }
+            
+            tokenStats.textContent = statsText;
+        }
+        
+        function toggleAutoTokenize() {
+            autoTokenize = !autoTokenize;
+            autoTokenizeBtn.textContent = autoTokenize ? 'Auto-Tokenize: ON' : 'Auto-Tokenize';
+            autoTokenizeBtn.className = autoTokenize ? 'btn btn-success' : 'btn btn-secondary';
+            
+            if (autoTokenize) {
+                tokenizeCode();
+            }
+        }
+        
+        function showError(message) {
+            errorEl.textContent = message;
+            errorEl.classList.add('show');
+        }
+        
+        function hideError() {
+            errorEl.classList.remove('show');
+        }
+        
+        function updateStatus(message) {
+            const statusEl = document.querySelector('.controls .stats');
+            if (statusEl) {
+                statusEl.textContent = message;
             }
         }
     </script>

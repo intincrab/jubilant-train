@@ -25,10 +25,6 @@ var ENVIRONMENT_IS_WORKER = typeof WorkerGlobalScope != 'undefined';
 var ENVIRONMENT_IS_NODE = typeof process == 'object' && process.versions?.node && process.type != 'renderer';
 var ENVIRONMENT_IS_SHELL = !ENVIRONMENT_IS_WEB && !ENVIRONMENT_IS_NODE && !ENVIRONMENT_IS_WORKER;
 
-if (ENVIRONMENT_IS_NODE) {
-
-}
-
 // --pre-jses are emitted after the Module integration code, so that they can
 // refer to Module (if they choose; they can also define Module)
 
@@ -69,7 +65,6 @@ if (ENVIRONMENT_IS_NODE) {
   var nodeVersion = process.versions.node;
   var numericVersion = nodeVersion.split('.').slice(0, 3);
   numericVersion = (numericVersion[0] * 10000) + (numericVersion[1] * 100) + (numericVersion[2].split('-')[0] * 1);
-  var minVersion = 160000;
   if (numericVersion < 160000) {
     throw new Error('This emscripten-generated code requires node v16.0.0 (detected v' + nodeVersion + ')');
   }
@@ -77,7 +72,6 @@ if (ENVIRONMENT_IS_NODE) {
   // These modules will usually be used on Node.js. Load them eagerly to avoid
   // the complexity of lazy-loading.
   var fs = require('fs');
-  var nodePath = require('path');
 
   scriptDirectory = __dirname + '/';
 
@@ -220,8 +214,6 @@ if (typeof WebAssembly != 'object') {
 
 // Wasm globals
 
-var wasmMemory;
-
 //========================================
 // Runtime essentials
 //========================================
@@ -249,41 +241,13 @@ function assert(condition, text) {
 // We used to include malloc/free by default in the past. Show a helpful error in
 // builds with assertions.
 
-// Memory management
-
-var HEAP,
-/** @type {!Int8Array} */
-  HEAP8,
-/** @type {!Uint8Array} */
-  HEAPU8,
-/** @type {!Int16Array} */
-  HEAP16,
-/** @type {!Uint16Array} */
-  HEAPU16,
-/** @type {!Int32Array} */
-  HEAP32,
-/** @type {!Uint32Array} */
-  HEAPU32,
-/** @type {!Float32Array} */
-  HEAPF32,
-/* BigInt64Array type is not correctly defined in closure
-/** not-@type {!BigInt64Array} */
-  HEAP64,
-/* BigUint64Array type is not correctly defined in closure
-/** not-t@type {!BigUint64Array} */
-  HEAPU64,
-/** @type {!Float64Array} */
-  HEAPF64;
-
-var runtimeInitialized = false;
-
 /**
  * Indicates whether filename is delivered via file protocol (as opposed to http/https)
  * @noinline
  */
 var isFileURI = (filename) => filename.startsWith('file://');
 
-// include: runtime_shared.js
+// include: runtime_common.js
 // include: runtime_stack_check.js
 // Initializes the stack cookie. Called at the startup of main and at the startup of each thread in pthreads mode.
 function writeStackCookie() {
@@ -353,6 +317,11 @@ function consumedModuleProp(prop) {
       }
     });
   }
+}
+
+function makeInvalidEarlyAccess(name) {
+  return () => assert(false, `call to '${name}' via reference taken before Wasm module initialization`);
+
 }
 
 function ignoredModuleProp(prop) {
@@ -440,8 +409,38 @@ function unexportedRuntimeSymbol(sym) {
 }
 
 // end include: runtime_debug.js
-// include: memoryprofiler.js
-// end include: memoryprofiler.js
+// Memory management
+
+var wasmMemory;
+
+var
+/** @type {!Int8Array} */
+  HEAP8,
+/** @type {!Uint8Array} */
+  HEAPU8,
+/** @type {!Int16Array} */
+  HEAP16,
+/** @type {!Uint16Array} */
+  HEAPU16,
+/** @type {!Int32Array} */
+  HEAP32,
+/** @type {!Uint32Array} */
+  HEAPU32,
+/** @type {!Float32Array} */
+  HEAPF32,
+/** @type {!Float64Array} */
+  HEAPF64;
+
+// BigInt64Array type is not correctly defined in closure
+var
+/** not-@type {!BigInt64Array} */
+  HEAP64,
+/* BigUint64Array type is not correctly defined in closure
+/** not-@type {!BigUint64Array} */
+  HEAPU64;
+
+var runtimeInitialized = false;
+
 
 
 function updateMemoryViews() {
@@ -458,7 +457,9 @@ function updateMemoryViews() {
   HEAPU64 = new BigUint64Array(b);
 }
 
-// end include: runtime_shared.js
+// include: memoryprofiler.js
+// end include: memoryprofiler.js
+// end include: runtime_common.js
 assert(typeof Int32Array != 'undefined' && typeof Float64Array !== 'undefined' && Int32Array.prototype.subarray != undefined && Int32Array.prototype.set != undefined,
        'JS engine does not provide full typed array support');
 
@@ -521,14 +522,6 @@ var runDependencies = 0;
 var dependenciesFulfilled = null; // overridden to take different actions when all run dependencies are fulfilled
 var runDependencyTracking = {};
 var runDependencyWatcher = null;
-
-function getUniqueRunDependency(id) {
-  var orig = id;
-  while (1) {
-    if (!runDependencyTracking[id]) return id;
-    id = orig + Math.random();
-  }
-}
 
 function addRunDependency(id) {
   runDependencies++;
@@ -750,6 +743,7 @@ async function createWasm() {
     assert(wasmMemory, 'memory not found in wasm exports');
     updateMemoryViews();
 
+    assignWasmExports(wasmExports);
     removeRunDependency('wasm-instantiate');
     return wasmExports;
   }
@@ -793,9 +787,9 @@ async function createWasm() {
   }
 
   wasmBinaryFile ??= findWasmBinary();
-    var result = await instantiateAsync(wasmBinary, wasmBinaryFile, info);
-    var exports = receiveInstantiationResult(result);
-    return exports;
+  var result = await instantiateAsync(wasmBinary, wasmBinaryFile, info);
+  var exports = receiveInstantiationResult(result);
+  return exports;
 }
 
 // end include: preamble.js
@@ -1183,18 +1177,10 @@ async function createWasm() {
       var startIdx = outIdx;
       var endIdx = outIdx + maxBytesToWrite - 1; // -1 for string null terminator.
       for (var i = 0; i < str.length; ++i) {
-        // Gotcha: charCodeAt returns a 16-bit word that is a UTF-16 encoded code
-        // unit, not a Unicode code point of the character! So decode
-        // UTF16->UTF32->UTF8.
-        // See http://unicode.org/faq/utf_bom.html#utf16-3
         // For UTF8 byte structure, see http://en.wikipedia.org/wiki/UTF-8#Description
         // and https://www.ietf.org/rfc/rfc2279.txt
         // and https://tools.ietf.org/html/rfc3629
-        var u = str.charCodeAt(i); // possibly a lead surrogate
-        if (u >= 0xD800 && u <= 0xDFFF) {
-          var u1 = str.charCodeAt(++i);
-          u = 0x10000 + ((u & 0x3FF) << 10) | (u1 & 0x3FF);
-        }
+        var u = str.codePointAt(i);
         if (u <= 0x7F) {
           if (outIdx >= endIdx) break;
           heap[outIdx++] = u;
@@ -1214,6 +1200,9 @@ async function createWasm() {
           heap[outIdx++] = 0x80 | ((u >> 12) & 63);
           heap[outIdx++] = 0x80 | ((u >> 6) & 63);
           heap[outIdx++] = 0x80 | (u & 63);
+          // Gotcha: if codePoint is over 0xFFFF, it is represented as a surrogate pair in UTF-16.
+          // We need to manually skip over the second code unit for correct iteration.
+          i++;
         }
       }
       // Null-terminate the pointer to the buffer.
@@ -1375,6 +1364,7 @@ Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
   'getTempRet0',
   'setTempRet0',
   'zeroMemory',
+  'withStackSave',
   'strError',
   'inetPton4',
   'inetNtop4',
@@ -1386,7 +1376,6 @@ Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
   'readEmAsmArgs',
   'jstoi_q',
   'getExecutableName',
-  'listenOnce',
   'autoResumeAudioContext',
   'getDynCaller',
   'dynCall',
@@ -1399,6 +1388,7 @@ Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
   'mmapAlloc',
   'HandleAllocator',
   'getNativeTypeSize',
+  'getUniqueRunDependency',
   'addOnInit',
   'addOnPostCtor',
   'addOnPreMain',
@@ -1779,6 +1769,43 @@ unexportedSymbols.forEach(unexportedRuntimeSymbol);
 function checkIncomingModuleAPI() {
   ignoredModuleProp('fetchSettings');
 }
+
+// Imports from the Wasm binary.
+var _malloc = Module['_malloc'] = makeInvalidEarlyAccess('_malloc');
+var _free = Module['_free'] = makeInvalidEarlyAccess('_free');
+var _compile = Module['_compile'] = makeInvalidEarlyAccess('_compile');
+var _tokenize = Module['_tokenize'] = makeInvalidEarlyAccess('_tokenize');
+var _free_result = Module['_free_result'] = makeInvalidEarlyAccess('_free_result');
+var _free_tokens = Module['_free_tokens'] = makeInvalidEarlyAccess('_free_tokens');
+var _main = Module['_main'] = makeInvalidEarlyAccess('_main');
+var _fflush = makeInvalidEarlyAccess('_fflush');
+var _strerror = makeInvalidEarlyAccess('_strerror');
+var _emscripten_stack_get_end = makeInvalidEarlyAccess('_emscripten_stack_get_end');
+var _emscripten_stack_get_base = makeInvalidEarlyAccess('_emscripten_stack_get_base');
+var _emscripten_stack_init = makeInvalidEarlyAccess('_emscripten_stack_init');
+var _emscripten_stack_get_free = makeInvalidEarlyAccess('_emscripten_stack_get_free');
+var __emscripten_stack_restore = makeInvalidEarlyAccess('__emscripten_stack_restore');
+var __emscripten_stack_alloc = makeInvalidEarlyAccess('__emscripten_stack_alloc');
+var _emscripten_stack_get_current = makeInvalidEarlyAccess('_emscripten_stack_get_current');
+
+function assignWasmExports(wasmExports) {
+  Module['_malloc'] = _malloc = createExportWrapper('malloc', 1);
+  Module['_free'] = _free = createExportWrapper('free', 1);
+  Module['_compile'] = _compile = createExportWrapper('compile', 1);
+  Module['_tokenize'] = _tokenize = createExportWrapper('tokenize', 1);
+  Module['_free_result'] = _free_result = createExportWrapper('free_result', 1);
+  Module['_free_tokens'] = _free_tokens = createExportWrapper('free_tokens', 1);
+  Module['_main'] = _main = createExportWrapper('__main_argc_argv', 2);
+  _fflush = createExportWrapper('fflush', 1);
+  _strerror = createExportWrapper('strerror', 1);
+  _emscripten_stack_get_end = wasmExports['emscripten_stack_get_end'];
+  _emscripten_stack_get_base = wasmExports['emscripten_stack_get_base'];
+  _emscripten_stack_init = wasmExports['emscripten_stack_init'];
+  _emscripten_stack_get_free = wasmExports['emscripten_stack_get_free'];
+  __emscripten_stack_restore = wasmExports['_emscripten_stack_restore'];
+  __emscripten_stack_alloc = wasmExports['_emscripten_stack_alloc'];
+  _emscripten_stack_get_current = wasmExports['emscripten_stack_get_current'];
+}
 var wasmImports = {
   /** @export */
   _abort_js: __abort_js,
@@ -1795,22 +1822,6 @@ var wasmImports = {
 };
 var wasmExports;
 createWasm();
-// Imports from the Wasm binary.
-var ___wasm_call_ctors = createExportWrapper('__wasm_call_ctors', 0);
-var _malloc = Module['_malloc'] = createExportWrapper('malloc', 1);
-var _compile = Module['_compile'] = createExportWrapper('compile', 1);
-var _free_result = Module['_free_result'] = createExportWrapper('free_result', 1);
-var _main = Module['_main'] = createExportWrapper('__main_argc_argv', 2);
-var _free = Module['_free'] = createExportWrapper('free', 1);
-var _fflush = createExportWrapper('fflush', 1);
-var _strerror = createExportWrapper('strerror', 1);
-var _emscripten_stack_get_end = () => (_emscripten_stack_get_end = wasmExports['emscripten_stack_get_end'])();
-var _emscripten_stack_get_base = () => (_emscripten_stack_get_base = wasmExports['emscripten_stack_get_base'])();
-var _emscripten_stack_init = () => (_emscripten_stack_init = wasmExports['emscripten_stack_init'])();
-var _emscripten_stack_get_free = () => (_emscripten_stack_get_free = wasmExports['emscripten_stack_get_free'])();
-var __emscripten_stack_restore = (a0) => (__emscripten_stack_restore = wasmExports['_emscripten_stack_restore'])(a0);
-var __emscripten_stack_alloc = (a0) => (__emscripten_stack_alloc = wasmExports['_emscripten_stack_alloc'])(a0);
-var _emscripten_stack_get_current = () => (_emscripten_stack_get_current = wasmExports['emscripten_stack_get_current'])();
 
 
 // include: postamble.js
